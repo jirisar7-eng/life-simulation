@@ -88,9 +88,31 @@ export class Camera {
     if (state.zoom !== undefined) this._zoom = this._clampZoom(state.zoom);
   }
 
-  public pan(dx: number, dy: number): void {
+  // Camera API Methods
+  public setPosition(x: number, y: number): void {
+    this._x = x;
+    this._y = y;
+  }
+
+  public move(dx: number, dy: number): void {
     this._x += dx;
     this._y += dy;
+  }
+
+  public pan(dx: number, dy: number): void {
+    this.move(dx, dy);
+  }
+
+  public setZoom(zoom: number): void {
+    this.zoom = zoom;
+  }
+
+  public zoomIn(factor = 1.25, pivot?: ScreenPosition): void {
+    this.zoomBy(factor, pivot);
+  }
+
+  public zoomOut(factor = 0.8, pivot?: ScreenPosition): void {
+    this.zoomBy(factor, pivot);
   }
 
   public zoomBy(factor: number, pivot?: ScreenPosition): void {
@@ -104,6 +126,12 @@ export class Camera {
     } else {
       this._zoom = nextZoom;
     }
+  }
+
+  public reset(): void {
+    this._x = 0;
+    this._y = 0;
+    this._zoom = 1.0;
   }
 
   public worldToScreen(worldPos: WorldPosition): ScreenPosition {

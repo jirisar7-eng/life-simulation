@@ -82,6 +82,38 @@ describe('Camera & Coordinate Transformations', () => {
     assert.strictEqual(cam.zoom, 1.5);
   });
 
+  test('handles Camera API methods: setPosition, move, setZoom, zoomIn, zoomOut, reset', () => {
+    const cam = new Camera({ x: 0, y: 0, zoom: 1.0, minZoom: 0.2, maxZoom: 5.0 });
+
+    // setPosition
+    cam.setPosition(50, -25);
+    assert.strictEqual(cam.x, 50);
+    assert.strictEqual(cam.y, -25);
+
+    // move
+    cam.move(-10, 30);
+    assert.strictEqual(cam.x, 40);
+    assert.strictEqual(cam.y, 5);
+
+    // setZoom
+    cam.setZoom(2.0);
+    assert.strictEqual(cam.zoom, 2.0);
+
+    // zoomIn
+    cam.zoomIn(1.5);
+    assert.strictEqual(cam.zoom, 3.0);
+
+    // zoomOut
+    cam.zoomOut(0.5);
+    assert.strictEqual(cam.zoom, 1.5);
+
+    // reset
+    cam.reset();
+    assert.strictEqual(cam.x, 0);
+    assert.strictEqual(cam.y, 0);
+    assert.strictEqual(cam.zoom, 1.0);
+  });
+
   test('handles viewport resizing correctly', () => {
     const cam = new Camera({ x: 0, y: 0, zoom: 1.0, viewportWidth: 800, viewportHeight: 600 });
     cam.setViewport(1920, 1080);
