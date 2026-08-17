@@ -1,5 +1,6 @@
 export type ActiveTab = 
   | 'overview'
+  | 'world-map'
   | 'hierarchy'
   | 'agent-model'
   | 'god-api'

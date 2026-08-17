@@ -6,6 +6,7 @@ import { GodApiMatrix } from './components/GodApiMatrix';
 import { TickPipelineVisualizer } from './components/TickPipelineVisualizer';
 import { ModuleRegistryViewer } from './components/ModuleRegistryViewer';
 import { RoadmapView } from './components/RoadmapView';
+import { WorldMapViewport } from './components/WorldMapViewport';
 import { 
   Sparkles, 
   Layers, 
@@ -19,7 +20,8 @@ import {
   Cpu,
   Eye,
   Shield,
-  Activity
+  Activity,
+  Map as MapIcon
 } from 'lucide-react';
 
 export default function App() {
@@ -27,6 +29,7 @@ export default function App() {
 
   const navItems = [
     { id: 'overview' as ActiveTab, label: 'Architektura & Přehled', icon: <Compass className="w-4 h-4" /> },
+    { id: 'world-map' as ActiveTab, label: 'World Renderer (Mapa)', icon: <MapIcon className="w-4 h-4" /> },
     { id: 'hierarchy' as ActiveTab, label: 'Hierarchie Světa', icon: <Layers className="w-4 h-4" /> },
     { id: 'agent-model' as ActiveTab, label: 'Model Agenta (NPC)', icon: <User className="w-4 h-4" /> },
     { id: 'god-api' as ActiveTab, label: 'Player / God API', icon: <Sparkles className="w-4 h-4" /> },
@@ -246,6 +249,32 @@ export default function App() {
                 </div>
               </div>
             </div>
+          </div>
+        )}
+
+        {activeTab === 'world-map' && (
+          <div id="world-map-tab" className="space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 bg-slate-900 border border-slate-800 rounded-2xl">
+              <div>
+                <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
+                  <MapIcon className="w-5 h-5 text-indigo-400" />
+                  Grafický Renderer Světa (PixiJS 8.x WebGL)
+                </h2>
+                <p className="text-xs text-slate-400 mt-1">
+                  Interaktivní testovací scéna s deterministickým převodem souřadnic (WorldPosition ↔ ScreenPosition) a plynulým ovládáním kamery.
+                </p>
+              </div>
+              <div className="flex items-center gap-3 text-xs font-mono">
+                <span className="px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-300">
+                  Tah myší: <strong className="text-indigo-300">Pan</strong>
+                </span>
+                <span className="px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-300">
+                  Kolečko: <strong className="text-emerald-300">Zoom</strong>
+                </span>
+              </div>
+            </div>
+
+            <WorldMapViewport />
           </div>
         )}
 
