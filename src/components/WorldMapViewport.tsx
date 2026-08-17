@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { WorldRenderer } from '../rendering/WorldRenderer';
+import { createSampleWorldMap } from '../models/map';
 import { ZoomIn, ZoomOut, RotateCcw, Move, Compass } from 'lucide-react';
 
 export interface WorldMapViewportProps {
@@ -37,6 +38,10 @@ export const WorldMapViewport: React.FC<WorldMapViewportProps> = ({ className = 
     rendererRef.current = renderer;
 
     let isMounted = true;
+
+    // Attach sample map data to renderer
+    const sampleMap = createSampleWorldMap(20, 16, 42);
+    renderer.setWorldMap(sampleMap);
 
     renderer.initialize(container).then(() => {
       if (isMounted) {

@@ -2,13 +2,17 @@ import { Application, Container, Graphics } from 'pixi.js';
 import { Camera } from './camera/Camera';
 import { RendererConfig, WorldPosition, ScreenPosition } from './types';
 import { DEFAULT_RENDERER_CONFIG } from './RendererConfig';
+import { WorldMap, TerrainType } from '../models/map';
 
 export class WorldRenderer {
   private _app: Application | null = null;
   private _camera: Camera;
   private _config: RendererConfig;
   private _worldContainer: Container | null = null;
+  private _mapContainer: Container | null = null;
+  private _mapGraphics: Graphics | null = null;
   private _debugGraphics: Graphics | null = null;
+  private _worldMap: WorldMap | null = null;
   private _isInitialized = false;
 
   constructor(config: Partial<RendererConfig> = {}) {
@@ -35,6 +39,16 @@ export class WorldRenderer {
     return this._app ? (this._app.canvas as HTMLCanvasElement) : null;
   }
 
+  public get worldMap(): WorldMap | null {
+    return this._worldMap;
+  }
+
+  public setWorldMap(map: WorldMap | null): void {
+    this._worldMap = map;
+    this._renderMapTiles();
+    this.render();
+  }
+
   public async initialize(targetElement?: HTMLElement | HTMLCanvasElement): Promise<void> {
     if (this._isInitialized) return;
 
@@ -57,10 +71,18 @@ export class WorldRenderer {
     this._worldContainer = new Container();
     this._app.stage.addChild(this._worldContainer);
 
+    this._mapContainer = new Container();
+    this._worldContainer.addChild(this._mapContainer);
+
+    this._mapGraphics = new Graphics();
+    this._mapContainer.addChild(this._mapGraphics);
+
     this._debugGraphics = new Graphics();
     this._worldContainer.addChild(this._debugGraphics);
 
-    this._buildTestScene();
+    this._buildGridAxes();
+    this._renderMapTiles();
+
     this._isInitialized = true;
     this.render();
   }
@@ -111,7 +133,10 @@ export class WorldRenderer {
 
     this._isInitialized = false;
     this._worldContainer = null;
+    this._mapContainer = null;
+    this._mapGraphics = null;
     this._debugGraphics = null;
+    this._worldMap = null;
 
     try {
       this._app.destroy(true, { children: true, texture: true });
@@ -121,70 +146,132 @@ export class WorldRenderer {
     this._app = null;
   }
 
-  private _buildTestScene(): void {
+  private _renderMapTiles(): void {
+    if (!this._mapGraphics) return;
+
+    this._mapGraphics.clear();
+
+    if (!this._worldMap) {
+      // Fallback: render basic sample geometric objects if no map is attached
+      this._buildSampleFallbackObjects();
+      return;
+    }
+
+    const tileSize = this._worldMap.tileSize;
+    const mapBounds = this._worldMap.getMapBounds();
+    const halfWidth = (mapBounds.width * tileSize) / 2;
+    const halfHeight = (mapBounds.height * tileSize) / 2;
+
+    const tiles = this._worldMap.getAllTiles();
+
+    for (const tile of tiles) {
+      const tileWorldX = tile.x * tileSize - halfWidth;
+      const tileWorldY = tile.y * tileSize - halfHeight;
+
+      const color = this._getTerrainColor(tile.terrain);
+      const strokeColor = this._getTerrainStrokeColor(tile.terrain);
+
+      this._mapGraphics
+        .rect(tileWorldX, tileWorldY, tileSize - 1, tileSize - 1)
+        .fill({ color, alpha: 0.9 })
+        .stroke({ width: 1, color: strokeColor });
+    }
+  }
+
+  private _getTerrainColor(terrain: TerrainType): number {
+    switch (terrain) {
+      case TerrainType.OCEAN:
+        return 0x0284c7; // Sky-600 deep blue
+      case TerrainType.COAST:
+        return 0x38bdf8; // Sky-400 coastal waters
+      case TerrainType.PLAINS:
+        return 0x22c55e; // Green-500 lush plains
+      case TerrainType.FOREST:
+        return 0x15803d; // Green-700 deep forest
+      case TerrainType.HILLS:
+        return 0x84cc16; // Lime-500 rolling hills
+      case TerrainType.MOUNTAINS:
+        return 0x64748b; // Slate-500 mountain rock
+      case TerrainType.DESERT:
+        return 0xeab308; // Yellow-500 desert sands
+      default:
+        return 0x475569; // Slate-600
+    }
+  }
+
+  private _getTerrainStrokeColor(terrain: TerrainType): number {
+    switch (terrain) {
+      case TerrainType.OCEAN:
+        return 0x0369a1;
+      case TerrainType.COAST:
+        return 0x0284c7;
+      case TerrainType.PLAINS:
+        return 0x16a34a;
+      case TerrainType.FOREST:
+        return 0x166534;
+      case TerrainType.HILLS:
+        return 0x65a30d;
+      case TerrainType.MOUNTAINS:
+        return 0x475569;
+      case TerrainType.DESERT:
+        return 0xca8a04;
+      default:
+        return 0x334155;
+    }
+  }
+
+  private _buildGridAxes(): void {
     if (!this._debugGraphics) return;
 
     this._debugGraphics.clear();
 
     // 1. Grid Axes (World Origin 0,0)
-    // Horizontal axis X
     this._debugGraphics
       .moveTo(-1000, 0)
       .lineTo(1000, 0)
-      .stroke({ width: 2, color: 0x334155 }); // Slate-700
+      .stroke({ width: 2, color: 0x334155, alpha: 0.7 });
 
-    // Vertical axis Y
     this._debugGraphics
       .moveTo(0, -1000)
       .lineTo(0, 1000)
-      .stroke({ width: 2, color: 0x334155 });
-
-    // Grid ticks (-400, -200, 200, 400)
-    for (let pos = -800; pos <= 800; pos += 200) {
-      if (pos === 0) continue;
-      this._debugGraphics
-        .moveTo(pos, -10)
-        .lineTo(pos, 10)
-        .stroke({ width: 1, color: 0x475569 });
-      this._debugGraphics
-        .moveTo(-10, pos)
-        .lineTo(10, pos)
-        .stroke({ width: 1, color: 0x475569 });
-    }
+      .stroke({ width: 2, color: 0x334155, alpha: 0.7 });
 
     // 2. World Origin Indicator (0,0)
     this._debugGraphics
-      .circle(0, 0, 12)
+      .circle(0, 0, 8)
       .fill({ color: 0x6366f1 }) // Indigo-500
-      .stroke({ width: 3, color: 0xffffff });
+      .stroke({ width: 2, color: 0xffffff });
+  }
 
-    // 3. Test Geometric Shapes (World Coordinates)
+  private _buildSampleFallbackObjects(): void {
+    if (!this._mapGraphics) return;
+
     // Region A indicator (Top-Left)
-    this._debugGraphics
+    this._mapGraphics
       .rect(-300, -200, 120, 80)
-      .fill({ color: 0x0ea5e9, alpha: 0.8 }) // Sky-500
+      .fill({ color: 0x0ea5e9, alpha: 0.8 })
       .stroke({ width: 2, color: 0x38bdf8 });
 
     // Region B indicator (Top-Right)
-    this._debugGraphics
+    this._mapGraphics
       .circle(260, -180, 50)
-      .fill({ color: 0x10b981, alpha: 0.8 }) // Emerald-500
+      .fill({ color: 0x10b981, alpha: 0.8 })
       .stroke({ width: 2, color: 0x34d399 });
 
     // Settlement C indicator (Bottom-Right)
-    this._debugGraphics
+    this._mapGraphics
       .poly([
         { x: 200, y: 150 },
         { x: 280, y: 220 },
         { x: 140, y: 220 },
       ])
-      .fill({ color: 0xf59e0b, alpha: 0.85 }) // Amber-500
+      .fill({ color: 0xf59e0b, alpha: 0.85 })
       .stroke({ width: 2, color: 0xfbbf24 });
 
     // Landmark D indicator (Bottom-Left)
-    this._debugGraphics
+    this._mapGraphics
       .star(-240, 180, 5, 45, 20)
-      .fill({ color: 0xec4899, alpha: 0.85 }) // Pink-500
+      .fill({ color: 0xec4899, alpha: 0.85 })
       .stroke({ width: 2, color: 0xf472b6 });
   }
 }
