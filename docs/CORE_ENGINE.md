@@ -118,3 +118,14 @@ Doménová služba pro bezpečnou správu hierarchického stromu entit (`src/mod
   - Kontrola hierarchické nadřazenosti tierů (`L7_WORLD` -> `L6_REGION` -> `L5_SETTLEMENT` -> `L4_COMMUNITY` -> `L3_GROUP` -> `L2_HOUSEHOLD` -> `L1_INDIVIDUAL`).
   - Striktní detekce a zamezení cyklů ve stromu.
 - **Čisté oddělení**: Neobsahuje žádnou simulační, tickovací, AI ani UI logiku.
+
+---
+
+## 11. World Query Service (`WorldQueryService`)
+Read-only API vrstva pro bezpečné dotazování a inspekci hierarchie světa (`src/models/worldQuery.ts`):
+- `getWorld()`: Vrátí kořenový uzel světa (`L7_WORLD`).
+- `getEntity(id)`: Vrátí uzel libovolné hierarchické úrovně podle ID.
+- `getChildren(id)`: Vrátí přímé potomky dané entity.
+- `getParent(id)`: Vrátí přímého rodiče dané entity.
+- `getDescendants(id)`: Rekurzivně vyhledá a vrátí všechny potomky pod danou entitou.
+- **Striktní Read-Only**: Neprovádí žádné mutace, nezasahuje do simulačního cyklu ani UI.

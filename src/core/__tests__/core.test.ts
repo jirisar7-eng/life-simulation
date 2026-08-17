@@ -32,6 +32,7 @@ import {
   traverseBottomUp,
   IHierarchyNode,
   WorldContainer,
+  WorldQueryService,
 } from '../index';
 
 describe('Simulation Clock & Determinism', () => {
@@ -717,6 +718,92 @@ describe('WorldContainer (Domain Hierarchy Service)', () => {
     assert.throws(() => {
       container.addEntity(invalidRegion);
     }, /Invalid hierarchy tier relation/);
+  });
+});
+
+describe('WorldQueryService (Read-Only Hierarchy API)', () => {
+  test('queries world, entities, parent, children and descendants across full hierarchy', () => {
+    const container = new WorldContainer();
+    const world = createWorldNode('world_root', 'Solaria');
+    const region = createRegionNode('reg_1', 'Verdant Basin', world.id);
+    const settlement = createSettlementNode('set_1', 'Riverbend', region.id);
+    const community = createCommunityNode('com_1', 'Artisan Enclave', settlement.id);
+    const group = createGroupNode('grp_1', 'Weavers Guild', community.id);
+    const household = createHouseholdNode('house_1', 'Loom Cottage', group.id);
+    const ind1 = createIndividualNode('ind_1', 'Lyra', household.id);
+    const ind2 = createIndividualNode('ind_2', 'Kael', household.id);
+
+    [world, region, settlement, community, group, household, ind1, ind2].forEach((n) =>
+      container.addEntity(n)
+    );
+
+    const query = new WorldQueryService(container);
+
+    // 1. getWorld()
+    const queriedWorld = query.getWorld();
+    assert.strictEqual(queriedWorld?.id, 'world_root');
+    assert.strictEqual(queriedWorld?.tier, 'L7_WORLD');
+
+    // 2. getEntity()
+    const retrievedGroup = query.getEntity('grp_1');
+    assert.strictEqual(retrievedGroup?.id, 'grp_1');
+    assert.strictEqual(retrievedGroup?.tier, 'L3_GROUP');
+    assert.strictEqual(retrievedGroup?.name, 'Weavers Guild');
+
+    // 3. getChildren()
+    const houseChildren = query.getChildren('house_1');
+    assert.strictEqual(houseChildren.length, 2);
+    assert.deepStrictEqual(
+      houseChildren.map((c) => c.id),
+      ['ind_1', 'ind_2']
+    );
+
+    const leafChildren = query.getChildren('ind_1');
+    assert.deepStrictEqual(leafChildren, []);
+
+    // 4. getParent()
+    const parentOfInd = query.getParent('ind_1');
+    assert.strictEqual(parentOfInd?.id, 'house_1');
+
+    const parentOfWorld = query.getParent('world_root');
+    assert.strictEqual(parentOfWorld, undefined);
+
+    // 5. getDescendants()
+    const allDescendantsOfWorld = query.getDescendants('world_root');
+    assert.strictEqual(allDescendantsOfWorld.length, 7);
+    const descendantIds = allDescendantsOfWorld.map((d) => d.id);
+    assert.ok(descendantIds.includes('reg_1'));
+    assert.ok(descendantIds.includes('set_1'));
+    assert.ok(descendantIds.includes('com_1'));
+    assert.ok(descendantIds.includes('grp_1'));
+    assert.ok(descendantIds.includes('house_1'));
+    assert.ok(descendantIds.includes('ind_1'));
+    assert.ok(descendantIds.includes('ind_2'));
+
+    // Descendants of group
+    const groupDescendants = query.getDescendants('grp_1');
+    assert.strictEqual(groupDescendants.length, 3); // house_1, ind_1, ind_2
+    assert.deepStrictEqual(
+      groupDescendants.map((d) => d.id),
+      ['house_1', 'ind_1', 'ind_2']
+    );
+
+    // Leaf node descendants
+    assert.deepStrictEqual(query.getDescendants('ind_1'), []);
+  });
+
+  test('safely handles non-existent entity IDs for all query methods', () => {
+    const container = new WorldContainer();
+    const query = new WorldQueryService(container);
+
+    // Empty world
+    assert.strictEqual(query.getWorld(), undefined);
+
+    // Non-existent lookups
+    assert.strictEqual(query.getEntity('does_not_exist'), undefined);
+    assert.deepStrictEqual(query.getChildren('does_not_exist'), []);
+    assert.strictEqual(query.getParent('does_not_exist'), undefined);
+    assert.deepStrictEqual(query.getDescendants('does_not_exist'), []);
   });
 });
 
