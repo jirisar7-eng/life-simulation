@@ -16,6 +16,21 @@ import {
   TickPhase,
   World,
   createWorld,
+  HIERARCHY_TIER_ORDER,
+  createWorldNode,
+  createRegionNode,
+  createSettlementNode,
+  createCommunityNode,
+  createGroupNode,
+  createHouseholdNode,
+  createIndividualNode,
+  addChildNode,
+  removeChildNode,
+  reparentNode,
+  getAncestryPath,
+  traverseTopDown,
+  traverseBottomUp,
+  IHierarchyNode,
 } from '../index';
 
 describe('Simulation Clock & Determinism', () => {
@@ -438,4 +453,146 @@ describe('World & WorldIdentity', () => {
     }, /Tick cannot be negative/);
   });
 });
+
+describe('World Hierarchy (L1–L7 Skeleton)', () => {
+  test('creates nodes for all 7 hierarchy tiers with stable IDs and correct tiers', () => {
+    const world = createWorldNode('world_0', 'Aethelgard World');
+    const region = createRegionNode('region_0', 'Northern Reaches', world.id);
+    const settlement = createSettlementNode('settlement_0', 'Oakhaven Town', region.id);
+    const community = createCommunityNode('community_0', 'Guild Quarter', settlement.id);
+    const group = createGroupNode('group_0', 'Blacksmiths Guild', community.id);
+    const household = createHouseholdNode('household_0', 'Ironforge Homestead', group.id);
+    const individual = createIndividualNode('individual_0', 'Torin Ironforge', household.id);
+
+    assert.strictEqual(world.tier, 'L7_WORLD');
+    assert.strictEqual(world.id, 'world_0');
+    assert.strictEqual(world.parentId, undefined);
+
+    assert.strictEqual(region.tier, 'L6_REGION');
+    assert.strictEqual(region.id, 'region_0');
+    assert.strictEqual(region.parentId, 'world_0');
+
+    assert.strictEqual(settlement.tier, 'L5_SETTLEMENT');
+    assert.strictEqual(settlement.id, 'settlement_0');
+    assert.strictEqual(settlement.parentId, 'region_0');
+
+    assert.strictEqual(community.tier, 'L4_COMMUNITY');
+    assert.strictEqual(community.id, 'community_0');
+    assert.strictEqual(community.parentId, 'settlement_0');
+
+    assert.strictEqual(group.tier, 'L3_GROUP');
+    assert.strictEqual(group.id, 'group_0');
+    assert.strictEqual(group.parentId, 'community_0');
+
+    assert.strictEqual(household.tier, 'L2_HOUSEHOLD');
+    assert.strictEqual(household.id, 'household_0');
+    assert.strictEqual(household.parentId, 'group_0');
+
+    assert.strictEqual(individual.tier, 'L1_INDIVIDUAL');
+    assert.strictEqual(individual.id, 'individual_0');
+    assert.strictEqual(individual.parentId, 'household_0');
+
+    assert.deepStrictEqual(HIERARCHY_TIER_ORDER, [
+      'L1_INDIVIDUAL',
+      'L2_HOUSEHOLD',
+      'L3_GROUP',
+      'L4_COMMUNITY',
+      'L5_SETTLEMENT',
+      'L6_REGION',
+      'L7_WORLD',
+    ]);
+  });
+
+  test('manages parent/child links: addChildNode, removeChildNode, reparentNode', () => {
+    const parentA = createSettlementNode('settlement_A', 'City A', 'region_0');
+    const parentB = createSettlementNode('settlement_B', 'City B', 'region_0');
+    const childGroup = createCommunityNode('comm_1', 'Harbor Community', parentA.id);
+
+    addChildNode(parentA, childGroup);
+    assert.deepStrictEqual(parentA.childrenIds, ['comm_1']);
+    assert.strictEqual(childGroup.parentId, 'settlement_A');
+
+    // Adding same child again is idempotent
+    addChildNode(parentA, childGroup);
+    assert.strictEqual(parentA.childrenIds.length, 1);
+
+    // Reparent child to parentB
+    reparentNode(childGroup, parentB, parentA);
+    assert.deepStrictEqual(parentA.childrenIds, []);
+    assert.deepStrictEqual(parentB.childrenIds, ['comm_1']);
+    assert.strictEqual(childGroup.parentId, 'settlement_B');
+
+    // Remove child
+    const removed = removeChildNode(parentB, 'comm_1');
+    assert.strictEqual(removed, true);
+    assert.deepStrictEqual(parentB.childrenIds, []);
+
+    const removedAgain = removeChildNode(parentB, 'comm_1');
+    assert.strictEqual(removedAgain, false);
+  });
+
+  test('traces ancestry path from leaf to root', () => {
+    const nodes = new Map<string, IHierarchyNode>();
+
+    const world = createWorldNode('w1', 'World');
+    const region = createRegionNode('r1', 'Region', world.id);
+    const settlement = createSettlementNode('s1', 'Settlement', region.id);
+    const community = createCommunityNode('c1', 'Community', settlement.id);
+    const group = createGroupNode('g1', 'Group', community.id);
+    const household = createHouseholdNode('h1', 'Household', group.id);
+    const ind = createIndividualNode('i1', 'Individual', household.id);
+
+    [world, region, settlement, community, group, household, ind].forEach((n) =>
+      nodes.set(n.id, n)
+    );
+
+    const lookup = (id: string) => nodes.get(id);
+    const path = getAncestryPath('i1', lookup);
+
+    assert.deepStrictEqual(path, ['i1', 'h1', 'g1', 'c1', 's1', 'r1', 'w1']);
+  });
+
+  test('supports bottom-up aggregation and top-down traversal', () => {
+    const nodes = new Map<string, IHierarchyNode>();
+
+    const world = createWorldNode('w', 'World');
+    const r1 = createRegionNode('r1', 'North', world.id);
+    const r2 = createRegionNode('r2', 'South', world.id);
+    addChildNode(world, r1);
+    addChildNode(world, r2);
+
+    const s1 = createSettlementNode('s1', 'Town 1', r1.id);
+    addChildNode(r1, s1);
+
+    const ind1 = createIndividualNode('i1', 'Agent 1', s1.id);
+    const ind2 = createIndividualNode('i2', 'Agent 2', s1.id);
+    addChildNode(s1, ind1);
+    addChildNode(s1, ind2);
+
+    [world, r1, r2, s1, ind1, ind2].forEach((n) => nodes.set(n.id, n));
+    const lookup = (id: string) => nodes.get(id);
+
+    // Top-down traversal test
+    const visitedIds: string[] = [];
+    traverseTopDown('w', lookup, (node) => {
+      visitedIds.push(node.id);
+    });
+    assert.deepStrictEqual(visitedIds, ['w', 'r1', 's1', 'i1', 'i2', 'r2']);
+
+    // Bottom-up aggregation (e.g. population counting)
+    const totalPopulation = traverseBottomUp<number>(
+      'w',
+      lookup,
+      (node, childrenPopulations) => {
+        if (node.tier === 'L1_INDIVIDUAL') {
+          return 1;
+        }
+        return childrenPopulations.reduce((acc, count) => acc + count, 0);
+      }
+    );
+
+    assert.strictEqual(totalPopulation, 2);
+  });
+});
+
 
