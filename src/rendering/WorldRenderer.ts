@@ -14,6 +14,7 @@ export class WorldRenderer {
   private _debugGraphics: Graphics | null = null;
   private _worldMap: WorldMap | null = null;
   private _isInitialized = false;
+  private _isDestroyed = false;
 
   constructor(config: Partial<RendererConfig> = {}) {
     this._config = { ...DEFAULT_RENDERER_CONFIG, ...config };
@@ -31,12 +32,17 @@ export class WorldRenderer {
     return this._isInitialized;
   }
 
+  public get isDestroyed(): boolean {
+    return this._isDestroyed;
+  }
+
   public get app(): Application | null {
     return this._app;
   }
 
   public get canvas(): HTMLCanvasElement | null {
-    return this._app ? (this._app.canvas as HTMLCanvasElement) : null;
+    if (!this._app || !this._app.canvas) return null;
+    return this._app.canvas as HTMLCanvasElement;
   }
 
   public get worldMap(): WorldMap | null {
@@ -45,15 +51,17 @@ export class WorldRenderer {
 
   public setWorldMap(map: WorldMap | null): void {
     this._worldMap = map;
-    this._renderMapTiles();
-    this.render();
+    if (this._isInitialized && !this._isDestroyed) {
+      this._renderMapTiles();
+      this.render();
+    }
   }
 
   public async initialize(targetElement?: HTMLElement | HTMLCanvasElement): Promise<void> {
-    if (this._isInitialized) return;
+    if (this._isInitialized || this._isDestroyed) return;
 
-    this._app = new Application();
-    await this._app.init({
+    const app = new Application();
+    await app.init({
       width: this._config.width,
       height: this._config.height,
       backgroundColor: this._config.backgroundColor,
@@ -64,12 +72,24 @@ export class WorldRenderer {
       canvas: targetElement instanceof HTMLCanvasElement ? targetElement : undefined,
     });
 
-    if (targetElement && !(targetElement instanceof HTMLCanvasElement)) {
-      targetElement.appendChild(this._app.canvas);
+    // If destroy was called while app.init() was resolving (e.g. React StrictMode unmount)
+    if (this._isDestroyed) {
+      try {
+        app.destroy(true, { children: true, texture: true });
+      } catch {
+        // ignore
+      }
+      return;
+    }
+
+    this._app = app;
+
+    if (targetElement && !(targetElement instanceof HTMLCanvasElement) && app.canvas) {
+      targetElement.appendChild(app.canvas);
     }
 
     this._worldContainer = new Container();
-    this._app.stage.addChild(this._worldContainer);
+    app.stage.addChild(this._worldContainer);
 
     this._mapContainer = new Container();
     this._worldContainer.addChild(this._mapContainer);
@@ -88,7 +108,7 @@ export class WorldRenderer {
   }
 
   public resize(width: number, height: number): void {
-    if (!this._app || !this._isInitialized) return;
+    if (!this._app || !this._app.renderer || !this._isInitialized || this._isDestroyed) return;
 
     const safeW = Math.max(10, width);
     const safeH = Math.max(10, height);
@@ -102,7 +122,7 @@ export class WorldRenderer {
   }
 
   public render(): void {
-    if (!this._app || !this._worldContainer || !this._isInitialized) return;
+    if (!this._app || !this._app.renderer || !this._worldContainer || !this._isInitialized || this._isDestroyed) return;
 
     // Apply Camera transform to world container
     // Pivot at center of screen
@@ -129,21 +149,27 @@ export class WorldRenderer {
   }
 
   public destroy(): void {
-    if (!this._app) return;
-
+    this._isDestroyed = true;
     this._isInitialized = false;
+
+    const app = this._app;
+    this._app = null;
     this._worldContainer = null;
     this._mapContainer = null;
     this._mapGraphics = null;
     this._debugGraphics = null;
     this._worldMap = null;
 
-    try {
-      this._app.destroy(true, { children: true, texture: true });
-    } catch {
-      // safe fallback if already destroyed
+    if (app) {
+      try {
+        if (app.canvas && app.canvas.parentElement) {
+          app.canvas.parentElement.removeChild(app.canvas);
+        }
+        app.destroy(true, { children: true, texture: true });
+      } catch {
+        // safe fallback if already destroyed
+      }
     }
-    this._app = null;
   }
 
   private _renderMapTiles(): void {

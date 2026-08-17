@@ -55,6 +55,7 @@ export const GameView: React.FC<GameViewProps> = ({
     });
 
     const resizeObserver = new ResizeObserver((entries) => {
+      if (!isMounted || renderer.isDestroyed) return;
       for (const entry of entries) {
         if (entry.contentRect.width > 0 && entry.contentRect.height > 0) {
           renderer.resize(entry.contentRect.width, entry.contentRect.height);
@@ -74,7 +75,7 @@ export const GameView: React.FC<GameViewProps> = ({
 
   // Pan Interaction (Mouse Drag)
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!rendererRef.current) return;
+    if (!rendererRef.current || rendererRef.current.isDestroyed) return;
     setIsDragging(true);
     dragStartRef.current = {
       x: e.clientX,
@@ -85,7 +86,7 @@ export const GameView: React.FC<GameViewProps> = ({
   };
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!rendererRef.current || !containerRef.current) return;
+    if (!rendererRef.current || !containerRef.current || rendererRef.current.isDestroyed) return;
 
     const rect = containerRef.current.getBoundingClientRect();
     const screenPos = {
@@ -117,7 +118,7 @@ export const GameView: React.FC<GameViewProps> = ({
 
   // Zoom Interaction (Mouse Wheel)
   const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
-    if (!rendererRef.current || !containerRef.current) return;
+    if (!rendererRef.current || !containerRef.current || rendererRef.current.isDestroyed) return;
     e.preventDefault();
 
     const rect = containerRef.current.getBoundingClientRect();
@@ -137,21 +138,21 @@ export const GameView: React.FC<GameViewProps> = ({
 
   // Camera Controls
   const handleZoomIn = () => {
-    if (!rendererRef.current) return;
+    if (!rendererRef.current || rendererRef.current.isDestroyed) return;
     rendererRef.current.camera.zoomIn(1.25);
     rendererRef.current.render();
     updateStats();
   };
 
   const handleZoomOut = () => {
-    if (!rendererRef.current) return;
+    if (!rendererRef.current || rendererRef.current.isDestroyed) return;
     rendererRef.current.camera.zoomOut(0.8);
     rendererRef.current.render();
     updateStats();
   };
 
   const handleResetCamera = () => {
-    if (!rendererRef.current) return;
+    if (!rendererRef.current || rendererRef.current.isDestroyed) return;
     rendererRef.current.camera.reset();
     rendererRef.current.render();
     updateStats();
