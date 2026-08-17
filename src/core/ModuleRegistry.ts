@@ -75,6 +75,10 @@ export class ModuleRegistry {
     return Array.from(this.modules.values());
   }
 
+  public getActiveModules(): ReadonlyArray<ISimulationModule> {
+    return Array.from(this.modules.values()).filter((mod) => mod.enabled !== false);
+  }
+
   /**
    * Resolves execution order based on module dependencies using topological sort.
    */

@@ -188,6 +188,124 @@ describe('Simulation Engine Lifecycle & Public API', () => {
     assert.strictEqual(tickResult.phase, TickPhase.END_TICK);
     assert.deepStrictEqual(tickEvents, ['started', 'completed']);
   });
+
+  test('rejects invalid state transitions safely', async () => {
+    const sim = createSimulation();
+    assert.strictEqual(sim.status, 'stopped');
+
+    // Cannot pause or resume when stopped
+    assert.strictEqual(sim.pause(), false);
+    assert.strictEqual(sim.status, 'stopped');
+    assert.strictEqual(sim.resume(), false);
+    assert.strictEqual(sim.status, 'stopped');
+    assert.strictEqual(await sim.stop(), false);
+
+    // Start -> running
+    assert.strictEqual(await sim.start(), true);
+    assert.strictEqual(sim.status, 'running');
+
+    // Cannot start again while running
+    assert.strictEqual(await sim.start(), false);
+    assert.strictEqual(sim.resume(), false);
+
+    // Pause -> paused
+    assert.strictEqual(sim.pause(), true);
+    assert.strictEqual(sim.status, 'paused');
+
+    // Cannot pause again or start while paused
+    assert.strictEqual(sim.pause(), false);
+    assert.strictEqual(await sim.start(), false);
+
+    // Resume -> running
+    assert.strictEqual(sim.resume(), true);
+    assert.strictEqual(sim.status, 'running');
+
+    // Stop -> stopped
+    assert.strictEqual(await sim.stop(), true);
+    assert.strictEqual(sim.status, 'stopped');
+
+    // Cannot stop again
+    assert.strictEqual(await sim.stop(), false);
+  });
+
+  test('executes tick pipeline with strictly ordered phases', () => {
+    const sim = createSimulation();
+    const phaseOrder: string[] = [];
+
+    const testModule: ISimulationModule = {
+      id: 'pipelineSpy',
+      name: 'Pipeline Spy',
+      version: '1.0.0',
+      onTick: (tick) => {
+        phaseOrder.push(tick.phase);
+      },
+    };
+
+    sim.modules.register(testModule);
+
+    sim.eventBus.subscribe('simulation.tick.started', (e) => {
+      phaseOrder.push((e.payload as { phase: string }).phase);
+    });
+
+    sim.eventBus.subscribe('simulation.tick.completed', (e) => {
+      phaseOrder.push((e.payload as { phase: string }).phase);
+    });
+
+    const tick = advanceTick(sim, 1);
+    assert.strictEqual(tick.tickNumber, 1);
+    assert.deepStrictEqual(phaseOrder, [
+      TickPhase.BEGIN_TICK,
+      TickPhase.PROCESS_MODULES,
+      TickPhase.END_TICK,
+    ]);
+  });
+
+  test('generates read-only, deep immutable runtime snapshot', () => {
+    const sim = createSimulation({ name: 'Snapshot World', mode: 'manual' });
+    sim.modules.register({
+      id: 'mod1',
+      name: 'Module One',
+      version: '1.0.0',
+      enabled: true,
+      dependencies: [],
+    });
+
+    sim.advanceTick(5);
+    const snapshot = sim.getSnapshot();
+
+    assert.strictEqual(snapshot.name, 'Snapshot World');
+    assert.strictEqual(snapshot.status, 'stopped');
+    assert.strictEqual(snapshot.mode, 'manual');
+    assert.strictEqual(snapshot.currentTick, 5);
+    assert.strictEqual(snapshot.simulationTime.tick, 5);
+    assert.strictEqual(snapshot.activeModules.length, 1);
+    assert.strictEqual(snapshot.activeModules[0].id, 'mod1');
+    assert.strictEqual(snapshot.timestampTick, 5);
+
+    // Verify snapshot immutability
+    assert.ok(Object.isFrozen(snapshot));
+    assert.ok(Object.isFrozen(snapshot.simulationTime));
+    assert.ok(Object.isFrozen(snapshot.activeModules));
+    assert.ok(Object.isFrozen(snapshot.world));
+
+    // Modifying snapshot copy should not affect engine
+    assert.throws(() => {
+      // @ts-expect-error test immutability
+      snapshot.status = 'running';
+    });
+  });
+
+  test('supports manual mode and mode configuration', () => {
+    const sim = createSimulation({ mode: 'manual' });
+    assert.strictEqual(sim.mode, 'manual');
+    assert.strictEqual(sim.isManual(), true);
+    assert.strictEqual(sim.isAutomatic(), false);
+
+    sim.setMode('automatic');
+    assert.strictEqual(sim.mode, 'automatic');
+    assert.strictEqual(sim.isManual(), false);
+    assert.strictEqual(sim.isAutomatic(), true);
+  });
 });
 
 describe('Entity System', () => {

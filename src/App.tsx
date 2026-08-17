@@ -61,7 +61,17 @@ export default function App() {
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="hidden sm:inline-flex text-xs px-2.5 py-1 rounded-full bg-emerald-950/60 text-emerald-400 border border-emerald-800/50 items-center gap-1.5 font-mono">
+              <div className="hidden sm:flex items-center gap-2 px-3 py-1 rounded-lg bg-slate-900 border border-slate-800 font-mono text-[11px]">
+                <span className="text-slate-400">Simulation:</span>
+                <span className="text-amber-400 font-bold">STOPPED</span>
+                <span className="text-slate-600">|</span>
+                <span className="text-slate-400">Mode:</span>
+                <span className="text-indigo-300">MANUAL</span>
+                <span className="text-slate-600">|</span>
+                <span className="text-slate-400">Tick:</span>
+                <span className="text-emerald-400 font-bold">0</span>
+              </div>
+              <span className="hidden lg:inline-flex text-xs px-2.5 py-1 rounded-full bg-emerald-950/60 text-emerald-400 border border-emerald-800/50 items-center gap-1.5 font-mono">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
                 Architektonický Návrh Aktivní
               </span>

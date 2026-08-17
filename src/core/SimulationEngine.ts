@@ -1,8 +1,10 @@
 import {
   ISimulation,
   ISimulationConfig,
+  ISimulationSnapshot,
   ISimulationTick,
   IWorldState,
+  SimulationMode,
   SimulationStatus,
   SimulationTime,
   TickPhase,
@@ -17,6 +19,7 @@ export class SimulationEngine implements ISimulation {
   public readonly id: string;
   public readonly name: string;
   private _status: SimulationStatus = 'stopped';
+  private _mode: SimulationMode = 'manual';
   private _clock: SimulationClock;
   private _random: RandomSource;
   private _eventBus: IEventBus;
@@ -28,6 +31,7 @@ export class SimulationEngine implements ISimulation {
   constructor(config: ISimulationConfig = {}) {
     this.id = config.id ?? `sim_${Math.floor(Math.random() * 1000000).toString(16)}`;
     this.name = config.name ?? 'Life Simulation World';
+    this._mode = config.mode ?? 'manual';
 
     this._clock = new SimulationClock({
       secondsPerTick: config.secondsPerTick ?? 60,
@@ -58,6 +62,22 @@ export class SimulationEngine implements ISimulation {
 
   public get status(): SimulationStatus {
     return this._status;
+  }
+
+  public get mode(): SimulationMode {
+    return this._mode;
+  }
+
+  public setMode(mode: SimulationMode): void {
+    this._mode = mode;
+  }
+
+  public isManual(): boolean {
+    return this._mode === 'manual';
+  }
+
+  public isAutomatic(): boolean {
+    return this._mode === 'automatic';
   }
 
   public get currentTick(): number {
@@ -95,43 +115,73 @@ export class SimulationEngine implements ISimulation {
     return this._entityManager;
   }
 
-  public async start(): Promise<void> {
-    if (this._status === 'running') return;
-
-    if (this._status === 'stopped') {
-      await this._moduleRegistry.initializeAll(this._context);
+  /**
+   * Starts the simulation runtime from 'stopped' state.
+   * Initializes all registered modules.
+   * Rejects transition if not in 'stopped' status.
+   */
+  public async start(): Promise<boolean> {
+    if (this._status !== 'stopped') {
+      return false;
     }
+
+    await this._moduleRegistry.initializeAll(this._context);
 
     this._status = 'running';
     this._eventBus.publish({
       type: 'simulation.started',
       tick: this.currentTick,
-      payload: { id: this.id, name: this.name },
+      payload: { id: this.id, name: this.name, tick: this.currentTick },
     });
+    return true;
   }
 
-  public pause(): void {
-    if (this._status !== 'running') return;
+  /**
+   * Pauses the simulation runtime from 'running' state.
+   * Rejects transition if not in 'running' status.
+   */
+  public pause(): boolean {
+    if (this._status !== 'running') {
+      return false;
+    }
+
     this._status = 'paused';
     this._eventBus.publish({
       type: 'simulation.paused',
       tick: this.currentTick,
-      payload: { tick: this.currentTick },
+      payload: { id: this.id, tick: this.currentTick },
     });
+    return true;
   }
 
-  public resume(): void {
-    if (this._status !== 'paused') return;
+  /**
+   * Resumes the simulation runtime from 'paused' state.
+   * Rejects transition if not in 'paused' status.
+   */
+  public resume(): boolean {
+    if (this._status !== 'paused') {
+      return false;
+    }
+
     this._status = 'running';
     this._eventBus.publish({
       type: 'simulation.resumed',
       tick: this.currentTick,
-      payload: { tick: this.currentTick },
+      payload: { id: this.id, tick: this.currentTick },
     });
+    return true;
   }
 
-  public async stop(): Promise<void> {
-    if (this._status === 'stopped') return;
+  /**
+   * Stops the simulation runtime from 'running' or 'paused' state.
+   * Shuts down all registered modules.
+   * Rejects transition if already 'stopped'.
+   */
+  public async stop(): Promise<boolean> {
+    if (this._status === 'stopped') {
+      return false;
+    }
+
     const finalTick = this.currentTick;
     this._status = 'stopped';
 
@@ -140,8 +190,9 @@ export class SimulationEngine implements ISimulation {
     this._eventBus.publish({
       type: 'simulation.stopped',
       tick: finalTick,
-      payload: { finalTick },
+      payload: { id: this.id, finalTick },
     });
+    return true;
   }
 
   /**
@@ -152,13 +203,14 @@ export class SimulationEngine implements ISimulation {
    * 3. END_TICK
    */
   public advanceTick(deltaTicks: number = 1): ISimulationTick {
-    const timeBefore = this._clock.advance(deltaTicks);
+    const validDelta = Math.max(1, Math.floor(deltaTicks));
+    const newTime = this._clock.advance(validDelta);
     const tickNumber = this._clock.getTick();
-    const deltaSeconds = deltaTicks * this._clock.getSecondsPerTick();
+    const deltaSeconds = validDelta * this._clock.getSecondsPerTick();
 
     const tickInfo: ISimulationTick = {
       tickNumber,
-      simulationTime: timeBefore,
+      simulationTime: newTime,
       deltaSeconds,
       phase: TickPhase.BEGIN_TICK,
     };
@@ -167,7 +219,12 @@ export class SimulationEngine implements ISimulation {
     this._eventBus.publish({
       type: 'simulation.tick.started',
       tick: tickNumber,
-      payload: { tick: tickInfo },
+      payload: {
+        tick: tickNumber,
+        simulationTime: { ...newTime },
+        deltaSeconds,
+        phase: TickPhase.BEGIN_TICK,
+      },
     });
 
     // 2. PROCESS_MODULES
@@ -188,10 +245,54 @@ export class SimulationEngine implements ISimulation {
     this._eventBus.publish({
       type: 'simulation.tick.completed',
       tick: tickNumber,
-      payload: { tick: tickInfo },
+      payload: {
+        tick: tickNumber,
+        simulationTime: { ...newTime },
+        deltaSeconds,
+        phase: TickPhase.END_TICK,
+      },
     });
 
     return tickInfo;
+  }
+
+  /**
+   * Returns a deep-frozen, read-only runtime snapshot of the simulation.
+   * Prevents external mutation of internal state.
+   */
+  public getSnapshot(): ISimulationSnapshot {
+    const allModules = this._moduleRegistry.getAll();
+    const moduleSnapshots = allModules.map((m) =>
+      Object.freeze({
+        id: m.id,
+        name: m.name,
+        version: m.version,
+        enabled: m.enabled !== false,
+        dependencies: Object.freeze([...(m.dependencies || [])]),
+      })
+    );
+
+    const worldSnapshot: IWorldState = {
+      id: this._world.id,
+      name: this._world.name,
+      createdTick: this._world.createdTick,
+      entitiesCount: this._entityManager.count(),
+      metadata: { ...this._world.metadata },
+    };
+
+    const snapshot: ISimulationSnapshot = {
+      id: this.id,
+      name: this.name,
+      status: this._status,
+      mode: this._mode,
+      currentTick: this.currentTick,
+      simulationTime: Object.freeze({ ...this._clock.getTime() }),
+      activeModules: Object.freeze(moduleSnapshots),
+      world: Object.freeze(worldSnapshot),
+      timestampTick: this.currentTick,
+    };
+
+    return Object.freeze(snapshot);
   }
 }
 
@@ -200,22 +301,26 @@ export function createSimulation(config?: ISimulationConfig): SimulationEngine {
   return new SimulationEngine(config);
 }
 
-export async function startSimulation(simulation: SimulationEngine): Promise<void> {
-  await simulation.start();
+export async function startSimulation(simulation: SimulationEngine): Promise<boolean> {
+  return simulation.start();
 }
 
-export function pauseSimulation(simulation: SimulationEngine): void {
-  simulation.pause();
+export function pauseSimulation(simulation: SimulationEngine): boolean {
+  return simulation.pause();
 }
 
-export function resumeSimulation(simulation: SimulationEngine): void {
-  simulation.resume();
+export function resumeSimulation(simulation: SimulationEngine): boolean {
+  return simulation.resume();
 }
 
-export async function stopSimulation(simulation: SimulationEngine): Promise<void> {
-  await simulation.stop();
+export async function stopSimulation(simulation: SimulationEngine): Promise<boolean> {
+  return simulation.stop();
 }
 
 export function advanceTick(simulation: SimulationEngine, deltaTicks?: number): ISimulationTick {
   return simulation.advanceTick(deltaTicks);
+}
+
+export function getSimulationSnapshot(simulation: SimulationEngine): ISimulationSnapshot {
+  return simulation.getSnapshot();
 }
