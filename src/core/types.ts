@@ -3,6 +3,13 @@
 export type EntityId = string;
 export type WorldId = string;
 
+export interface WorldIdentity {
+  readonly id: WorldId;
+  readonly name: string;
+  readonly description: string;
+  readonly createdAt: number;
+}
+
 export type SimulationStatus = 'stopped' | 'running' | 'paused';
 export type SimulationMode = 'manual' | 'automatic';
 

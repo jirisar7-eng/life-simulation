@@ -14,6 +14,8 @@ import {
   ISimulationModule,
   EntityManager,
   TickPhase,
+  World,
+  createWorld,
 } from '../index';
 
 describe('Simulation Clock & Determinism', () => {
@@ -337,5 +339,40 @@ describe('Entity System', () => {
     manager.remove('ent_1');
     assert.strictEqual(manager.count(), 1);
     assert.strictEqual(manager.has('ent_1'), false);
+  });
+});
+
+describe('World & WorldIdentity', () => {
+  test('creates world with valid immutable identity', () => {
+    const world = createWorld('world_prime', 'Terra Nova', 'The primary cradle of civilization', 0, {
+      tier: 'L7_WORLD',
+    });
+
+    assert.strictEqual(world.id, 'world_prime');
+    assert.strictEqual(world.name, 'Terra Nova');
+    assert.strictEqual(world.description, 'The primary cradle of civilization');
+    assert.strictEqual(world.createdAt, 0);
+    assert.strictEqual(world.metadata.tier, 'L7_WORLD');
+
+    // Identity is frozen / immutable
+    assert.ok(Object.isFrozen(world.identity));
+    assert.throws(() => {
+      // @ts-expect-error test immutability
+      world.identity.name = 'New Name';
+    });
+  });
+
+  test('constructs World class instance directly with custom identity', () => {
+    const customWorld = new World({
+      id: 'world_custom',
+      name: 'Aethelgard',
+      description: 'Ancient realm',
+      createdAt: 100,
+    });
+
+    assert.strictEqual(customWorld.id, 'world_custom');
+    assert.strictEqual(customWorld.name, 'Aethelgard');
+    assert.strictEqual(customWorld.description, 'Ancient realm');
+    assert.strictEqual(customWorld.createdAt, 100);
   });
 });
