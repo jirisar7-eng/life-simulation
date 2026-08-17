@@ -132,10 +132,13 @@ Read-only API vrstva pro bezpečné dotazování a inspekci hierarchie světa (`
 
 ---
 
-## 12. Entity Repository Foundation (`IEntityRepository`)
+## 12. Entity Repository & Persistence Layer
 Abstraktní persistence rozhraní pro ukládání a načítání entit (`src/repositories/entityRepository.ts`):
-- **Rozhraní**: `getById(id)`, `getAll()`, `save(entity)`, `delete(id)`, `exists(id)`.
+- **Rozhraní (`IEntityRepository`)**: `getById(id)`, `getAll()`, `save(entity)`, `delete(id)`, `exists(id)`.
 - **Implementace**:
-  - `InMemoryEntityRepository`: Plně funkční in-memory adaptér pro runtime a testy bez externích závislostí.
-  - Plánováno: budoucí `PrismaEntityRepository` / SQL adaptér.
-- **Oddělení vrstev**: Core Engine neobsahuje žádné přímé vazby na konkrétní databázový ORM ani persistence technologii.
+  - `InMemoryEntityRepository`: Čistý in-memory adaptér pro runtime a testy bez externích závislostí.
+  - `PrismaEntityRepository` (`src/repositories/prismaEntityRepository.ts`): PostgreSQL persistence adaptér využívající Prisma ORM.
+- **Domain Separation (`EntityMapper`)**:
+  - `EntityMapper.toDomain()`: Převod z Prisma schématu na čistý doménový model `IEntity`.
+  - `EntityMapper.toPrisma()`: Převod z doménového modelu na Prisma data strukturu.
+- **Oddělení vrstev**: Core Engine neobsahuje žádné přímé importy Prisma ani databázových závislostí.

@@ -16,6 +16,7 @@ export interface IEntity {
   readonly id: EntityId;
   readonly type: EntityType;
   readonly createdAtTick: number;
+  parentId?: EntityId;
   tags: Set<string> | string[];
   metadata: Record<string, unknown>;
 }
