@@ -1,0 +1,6 @@
+{
+  "name": "Life Simulation Engine",
+  "description": "Modulární simulace života s rolí boha, hierarchickým světem, autonomními agenty a rozšiřitelným event systémem.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
