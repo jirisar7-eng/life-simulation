@@ -6,7 +6,7 @@ import {
   MapBounds,
   WorldMapOptions,
 } from './types';
-import { RandomSource, SeededRandom } from '../../core/random';
+import { TerrainGenerator } from './TerrainGenerator';
 
 export class WorldMap {
   private readonly _id: string;
@@ -14,6 +14,7 @@ export class WorldMap {
   private readonly _width: number;
   private readonly _height: number;
   private readonly _tileSize: number;
+  private readonly _seed: number | string;
   private readonly _tiles: Map<string, MapTile>;
 
   constructor(options: WorldMapOptions) {
@@ -26,11 +27,12 @@ export class WorldMap {
     this._width = Math.floor(options.width);
     this._height = Math.floor(options.height);
     this._tileSize = options.tileSize ?? 32;
+    this._seed = options.seed ?? 12345;
     this._tiles = new Map();
 
     const defaultTerrain = options.defaultTerrain ?? TerrainType.PLAINS;
     const defaultBiome = options.defaultBiome ?? BiomeType.TEMPERATE;
-    const defaultElevation = options.defaultElevation ?? 10;
+    const defaultElevation = options.defaultElevation ?? 0.5;
     const defaultWater = options.defaultWater ?? WaterState.NONE;
 
     // Initialize map grid with deterministic default tiles
@@ -56,6 +58,10 @@ export class WorldMap {
 
   public get name(): string {
     return this._name;
+  }
+
+  public get seed(): number | string {
+    return this._seed;
   }
 
   public get width(): number {
@@ -134,72 +140,13 @@ export function createWorldMap(options: WorldMapOptions): WorldMap {
 }
 
 /**
- * Helper to generate a small deterministic sample map using SeededRandom
+ * Sample generator powered deterministically by TerrainGenerator
  */
 export function createSampleWorldMap(
-  width = 16,
-  height = 12,
-  seed: number | string = 42
+  width = 32,
+  height = 24,
+  seed: number | string = 12345
 ): WorldMap {
-  const map = new WorldMap({
-    width,
-    height,
-    tileSize: 32,
-    defaultTerrain: TerrainType.OCEAN,
-    defaultBiome: BiomeType.TEMPERATE,
-    defaultWater: WaterState.OCEAN,
-    defaultElevation: 0,
-  });
-
-  const rng: RandomSource = new SeededRandom(seed);
-
-  // Deterministically generate a simple island / continent sample in the center
-  const centerX = width / 2;
-  const centerY = height / 2;
-  const radius = Math.min(width, height) * 0.38;
-
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const dx = x - centerX;
-      const dy = y - centerY;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      const noise = (rng.next() - 0.5) * 1.5;
-
-      if (dist + noise < radius * 0.4) {
-        // High interior -> Mountains/Hills
-        map.setTile(x, y, {
-          terrain: TerrainType.MOUNTAINS,
-          elevation: 80,
-          water: WaterState.NONE,
-          biome: BiomeType.COLD,
-        });
-      } else if (dist + noise < radius * 0.7) {
-        // Mid interior -> Forest / Hills
-        map.setTile(x, y, {
-          terrain: rng.next() > 0.4 ? TerrainType.FOREST : TerrainType.HILLS,
-          elevation: 40,
-          water: WaterState.NONE,
-          biome: BiomeType.TEMPERATE,
-        });
-      } else if (dist + noise < radius * 0.95) {
-        // Low interior -> Plains / Coast
-        map.setTile(x, y, {
-          terrain: TerrainType.PLAINS,
-          elevation: 15,
-          water: WaterState.NONE,
-          biome: BiomeType.TEMPERATE,
-        });
-      } else if (dist + noise < radius * 1.15) {
-        // Coastline
-        map.setTile(x, y, {
-          terrain: TerrainType.COAST,
-          elevation: 3,
-          water: WaterState.OCEAN,
-          biome: BiomeType.TEMPERATE,
-        });
-      }
-    }
-  }
-
-  return map;
+  const generator = new TerrainGenerator({ seed });
+  return generator.generate(width, height);
 }

@@ -1,22 +1,26 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { WorldRenderer } from '../rendering/WorldRenderer';
-import { createSampleWorldMap } from '../models/map';
-import { ZoomIn, ZoomOut, RotateCcw, Move, Compass, ShieldAlert } from 'lucide-react';
+import { createProceduralWorldMap } from '../models/map';
+import { ZoomIn, ZoomOut, RotateCcw, Move, Compass, ShieldAlert, Dice5 } from 'lucide-react';
 
 export interface GameViewProps {
   className?: string;
+  seed?: number | string;
   onOpenArchitectureHub?: () => void;
 }
 
 export const GameView: React.FC<GameViewProps> = ({
   className = '',
+  seed: initialSeed = 12345,
   onOpenArchitectureHub,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<WorldRenderer | null>(null);
 
+  const [currentSeed, setCurrentSeed] = useState<number | string>(initialSeed);
   const [cameraStats, setCameraStats] = useState({ x: 0, y: 0, zoom: 1.0 });
   const [cursorWorldPos, setCursorWorldPos] = useState<{ x: number; y: number } | null>(null);
+  const [cursorTileInfo, setCursorTileInfo] = useState<{ terrain: string; elevation: number } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const dragStartRef = useRef<{ x: number; y: number; camX: number; camY: number } | null>(null);
 
@@ -44,8 +48,8 @@ export const GameView: React.FC<GameViewProps> = ({
 
     let isMounted = true;
 
-    // Load initial world map data
-    const worldMap = createSampleWorldMap(24, 18, 42);
+    // Load procedural world map with current seed
+    const worldMap = createProceduralWorldMap(36, 26, currentSeed);
     renderer.setWorldMap(worldMap);
 
     renderer.initialize(container).then(() => {
@@ -71,7 +75,7 @@ export const GameView: React.FC<GameViewProps> = ({
       renderer.destroy();
       rendererRef.current = null;
     };
-  }, [updateStats]);
+  }, [currentSeed, updateStats]);
 
   // Pan Interaction (Mouse Drag)
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -98,6 +102,28 @@ export const GameView: React.FC<GameViewProps> = ({
       x: Math.round(worldPos.x),
       y: Math.round(worldPos.y),
     });
+
+    // Inspect hovered tile
+    const worldMap = rendererRef.current.worldMap;
+    if (worldMap) {
+      const tileSize = worldMap.tileSize;
+      const mapBounds = worldMap.getMapBounds();
+      const halfW = (mapBounds.width * tileSize) / 2;
+      const halfH = (mapBounds.height * tileSize) / 2;
+
+      const tileX = Math.floor((worldPos.x + halfW) / tileSize);
+      const tileY = Math.floor((worldPos.y + halfH) / tileSize);
+      const tile = worldMap.getTile(tileX, tileY);
+
+      if (tile) {
+        setCursorTileInfo({
+          terrain: tile.terrain,
+          elevation: tile.elevation,
+        });
+      } else {
+        setCursorTileInfo(null);
+      }
+    }
 
     if (isDragging && dragStartRef.current) {
       const dx = (e.clientX - dragStartRef.current.x) / rendererRef.current.camera.zoom;
@@ -158,6 +184,12 @@ export const GameView: React.FC<GameViewProps> = ({
     updateStats();
   };
 
+  const handleRegenerateSeed = () => {
+    // Generate next deterministic seed integer
+    const nextSeed = typeof currentSeed === 'number' ? currentSeed + 1 : Number(currentSeed) + 1 || 12346;
+    setCurrentSeed(nextSeed);
+  };
+
   return (
     <div
       id="game-view"
@@ -175,14 +207,24 @@ export const GameView: React.FC<GameViewProps> = ({
       />
 
       {/* Top Left Header Overlay */}
-      <div className="absolute top-4 left-4 flex items-center gap-2">
+      <div className="absolute top-4 left-4 flex flex-wrap items-center gap-2">
         <div className="px-3.5 py-2 rounded-xl bg-slate-900/90 border border-slate-700/80 backdrop-blur-md flex items-center gap-2.5 shadow-xl">
           <Compass className="w-4 h-4 text-indigo-400" />
-          <span className="text-xs font-bold text-white tracking-wide">LIFE SIMULATION — WORLD VIEW</span>
+          <span className="text-xs font-bold text-white tracking-wide">LIFE SIMULATION — PROCEDURAL WORLD</span>
           <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-800/80">
-            WebGL 2D
+            Seed: {currentSeed}
           </span>
         </div>
+
+        <button
+          id="btn-regenerate-seed"
+          onClick={handleRegenerateSeed}
+          title="Generovat nový svět s dalším seedem"
+          className="px-3 py-2 rounded-xl bg-slate-900/90 hover:bg-slate-850 border border-slate-700/80 backdrop-blur-md text-xs font-semibold text-emerald-400 hover:text-emerald-300 flex items-center gap-1.5 transition-all shadow-xl"
+        >
+          <Dice5 className="w-4 h-4" />
+          <span className="hidden sm:inline">Další Seed</span>
+        </button>
       </div>
 
       {/* Top Right Controls & Diagnostics Link */}
@@ -239,11 +281,13 @@ export const GameView: React.FC<GameViewProps> = ({
           <span className="text-emerald-400 font-semibold">{cameraStats.zoom}x</span>
         </div>
 
-        {cursorWorldPos && (
+        {cursorTileInfo && (
           <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-900/90 border border-slate-800/90 backdrop-blur-md text-xs font-mono text-slate-300 shadow-xl">
-            <span className="text-slate-400">Cursor World:</span>
-            <span className="text-amber-300 font-semibold">X: {cursorWorldPos.x}</span>
-            <span className="text-amber-300 font-semibold">Y: {cursorWorldPos.y}</span>
+            <span className="text-slate-400">Tile:</span>
+            <span className="text-amber-300 font-bold">{cursorTileInfo.terrain}</span>
+            <span className="text-slate-600">|</span>
+            <span className="text-slate-400">Height:</span>
+            <span className="text-sky-300 font-semibold">{Math.round(cursorTileInfo.elevation * 100)}%</span>
           </div>
         )}
       </div>

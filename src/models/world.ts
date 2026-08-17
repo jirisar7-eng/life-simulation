@@ -2,7 +2,9 @@ import { WorldId, WorldIdentity, WorldState, WorldStatus, SimulationTime } from 
 
 export type { WorldStatus, WorldState };
 
-export interface IWorldIdentity extends WorldIdentity {}
+export interface IWorldIdentity extends WorldIdentity {
+  readonly seed?: number | string;
+}
 
 export interface IWorldState extends WorldState {}
 
@@ -27,6 +29,7 @@ export class World implements IWorld {
       name: identity.name,
       description: identity.description ?? '',
       createdAt: identity.createdAt ?? 0,
+      seed: identity.seed ?? 12345,
     });
 
     this.state = {
@@ -64,6 +67,10 @@ export class World implements IWorld {
     return this.identity.createdAt;
   }
 
+  public get seed(): number | string {
+    return this.identity.seed ?? 12345;
+  }
+
   public get status(): WorldStatus {
     return this.state.status;
   }
@@ -98,7 +105,8 @@ export function createWorld(
   description: string = '',
   createdAt: number = 0,
   initialState?: Partial<IWorldState>,
-  metadata: Record<string, unknown> = {}
+  metadata: Record<string, unknown> = {},
+  seed: number | string = 12345
 ): World {
   return new World(
     {
@@ -106,9 +114,9 @@ export function createWorld(
       name,
       description,
       createdAt,
+      seed,
     },
     initialState,
     metadata
   );
 }
-

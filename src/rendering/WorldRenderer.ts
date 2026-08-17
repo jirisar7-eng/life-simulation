@@ -199,48 +199,52 @@ export class WorldRenderer {
 
       this._mapGraphics
         .rect(tileWorldX, tileWorldY, tileSize - 1, tileSize - 1)
-        .fill({ color, alpha: 0.9 })
+        .fill({ color, alpha: 0.95 })
         .stroke({ width: 1, color: strokeColor });
     }
   }
 
   private _getTerrainColor(terrain: TerrainType): number {
     switch (terrain) {
-      case TerrainType.OCEAN:
-        return 0x0284c7; // Sky-600 deep blue
-      case TerrainType.COAST:
-        return 0x38bdf8; // Sky-400 coastal waters
+      case TerrainType.DEEP_WATER:
+        return 0x0369a1; // Deep ocean blue
+      case TerrainType.SHALLOW_WATER:
+        return 0x38bdf8; // Shallow turquoise water
+      case TerrainType.BEACH:
+        return 0xfde047; // Sandy golden beach
       case TerrainType.PLAINS:
-        return 0x22c55e; // Green-500 lush plains
+        return 0x4ade80; // Vibrant grass plains
       case TerrainType.FOREST:
-        return 0x15803d; // Green-700 deep forest
+        return 0x15803d; // Lush emerald forest
       case TerrainType.HILLS:
-        return 0x84cc16; // Lime-500 rolling hills
+        return 0x84cc16; // Lime hilly terrain
       case TerrainType.MOUNTAINS:
-        return 0x64748b; // Slate-500 mountain rock
+        return 0x94a3b8; // Slate mountain peaks
       case TerrainType.DESERT:
-        return 0xeab308; // Yellow-500 desert sands
+        return 0xf59e0b; // Warm desert amber
       default:
-        return 0x475569; // Slate-600
+        return 0x475569;
     }
   }
 
   private _getTerrainStrokeColor(terrain: TerrainType): number {
     switch (terrain) {
-      case TerrainType.OCEAN:
-        return 0x0369a1;
-      case TerrainType.COAST:
+      case TerrainType.DEEP_WATER:
+        return 0x075985;
+      case TerrainType.SHALLOW_WATER:
         return 0x0284c7;
+      case TerrainType.BEACH:
+        return 0xeab308;
       case TerrainType.PLAINS:
-        return 0x16a34a;
+        return 0x22c55e;
       case TerrainType.FOREST:
         return 0x166534;
       case TerrainType.HILLS:
         return 0x65a30d;
       case TerrainType.MOUNTAINS:
-        return 0x475569;
+        return 0x64748b;
       case TerrainType.DESERT:
-        return 0xca8a04;
+        return 0xd97706;
       default:
         return 0x334155;
     }

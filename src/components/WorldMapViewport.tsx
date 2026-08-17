@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { WorldRenderer } from '../rendering/WorldRenderer';
-import { createSampleWorldMap } from '../models/map';
-import { ZoomIn, ZoomOut, RotateCcw, Move, Compass } from 'lucide-react';
+import { createProceduralWorldMap } from '../models/map';
+import { ZoomIn, ZoomOut, RotateCcw, Move, RefreshCw } from 'lucide-react';
 
 export interface WorldMapViewportProps {
   className?: string;
@@ -10,6 +10,8 @@ export interface WorldMapViewportProps {
 export const WorldMapViewport: React.FC<WorldMapViewportProps> = ({ className = '' }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<WorldRenderer | null>(null);
+
+  const [seed, setSeed] = useState<number>(42);
   const [cameraStats, setCameraStats] = useState({ x: 0, y: 0, zoom: 1.0 });
   const [cursorWorldPos, setCursorWorldPos] = useState<{ x: number; y: number } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -39,8 +41,8 @@ export const WorldMapViewport: React.FC<WorldMapViewportProps> = ({ className = 
 
     let isMounted = true;
 
-    // Attach sample map data to renderer
-    const sampleMap = createSampleWorldMap(20, 16, 42);
+    // Attach procedural map data to renderer
+    const sampleMap = createProceduralWorldMap(24, 18, seed);
     renderer.setWorldMap(sampleMap);
 
     renderer.initialize(container).then(() => {
@@ -50,6 +52,7 @@ export const WorldMapViewport: React.FC<WorldMapViewportProps> = ({ className = 
     });
 
     const resizeObserver = new ResizeObserver((entries) => {
+      if (!isMounted || renderer.isDestroyed) return;
       for (const entry of entries) {
         if (entry.contentRect.width > 0 && entry.contentRect.height > 0) {
           renderer.resize(entry.contentRect.width, entry.contentRect.height);
@@ -65,11 +68,11 @@ export const WorldMapViewport: React.FC<WorldMapViewportProps> = ({ className = 
       renderer.destroy();
       rendererRef.current = null;
     };
-  }, [updateStats]);
+  }, [seed, updateStats]);
 
-  // Handle Pan Interaction (Mouse Drag)
+  // Pan Interaction (Mouse Drag)
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!rendererRef.current) return;
+    if (!rendererRef.current || rendererRef.current.isDestroyed) return;
     setIsDragging(true);
     dragStartRef.current = {
       x: e.clientX,
@@ -80,7 +83,7 @@ export const WorldMapViewport: React.FC<WorldMapViewportProps> = ({ className = 
   };
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!rendererRef.current || !containerRef.current) return;
+    if (!rendererRef.current || !containerRef.current || rendererRef.current.isDestroyed) return;
 
     const rect = containerRef.current.getBoundingClientRect();
     const screenPos = {
@@ -96,8 +99,10 @@ export const WorldMapViewport: React.FC<WorldMapViewportProps> = ({ className = 
     if (isDragging && dragStartRef.current) {
       const dx = (e.clientX - dragStartRef.current.x) / rendererRef.current.camera.zoom;
       const dy = (e.clientY - dragStartRef.current.y) / rendererRef.current.camera.zoom;
-      rendererRef.current.camera.x = dragStartRef.current.camX - dx;
-      rendererRef.current.camera.y = dragStartRef.current.camY - dy;
+      rendererRef.current.camera.setPosition(
+        dragStartRef.current.camX - dx,
+        dragStartRef.current.camY - dy
+      );
       rendererRef.current.render();
       updateStats();
     }
@@ -108,9 +113,9 @@ export const WorldMapViewport: React.FC<WorldMapViewportProps> = ({ className = 
     dragStartRef.current = null;
   };
 
-  // Handle Zoom (Wheel)
+  // Zoom Interaction (Mouse Wheel)
   const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
-    if (!rendererRef.current || !containerRef.current) return;
+    if (!rendererRef.current || !containerRef.current || rendererRef.current.isDestroyed) return;
     e.preventDefault();
 
     const rect = containerRef.current.getBoundingClientRect();
@@ -119,29 +124,33 @@ export const WorldMapViewport: React.FC<WorldMapViewportProps> = ({ className = 
       y: e.clientY - rect.top,
     };
 
-    const zoomFactor = e.deltaY < 0 ? 1.15 : 0.85;
-    rendererRef.current.camera.zoomBy(zoomFactor, pivot);
+    if (e.deltaY < 0) {
+      rendererRef.current.camera.zoomIn(1.15, pivot);
+    } else {
+      rendererRef.current.camera.zoomOut(0.85, pivot);
+    }
     rendererRef.current.render();
     updateStats();
   };
 
+  // Camera Controls
   const handleZoomIn = () => {
-    if (!rendererRef.current) return;
-    rendererRef.current.camera.zoomBy(1.25);
+    if (!rendererRef.current || rendererRef.current.isDestroyed) return;
+    rendererRef.current.camera.zoomIn(1.25);
     rendererRef.current.render();
     updateStats();
   };
 
   const handleZoomOut = () => {
-    if (!rendererRef.current) return;
-    rendererRef.current.camera.zoomBy(0.8);
+    if (!rendererRef.current || rendererRef.current.isDestroyed) return;
+    rendererRef.current.camera.zoomOut(0.8);
     rendererRef.current.render();
     updateStats();
   };
 
   const handleResetCamera = () => {
-    if (!rendererRef.current) return;
-    rendererRef.current.camera.setState({ x: 0, y: 0, zoom: 1.0 });
+    if (!rendererRef.current || rendererRef.current.isDestroyed) return;
+    rendererRef.current.camera.reset();
     rendererRef.current.render();
     updateStats();
   };
@@ -149,9 +158,9 @@ export const WorldMapViewport: React.FC<WorldMapViewportProps> = ({ className = 
   return (
     <div
       id="world-map-viewport"
-      className={`relative w-full h-[540px] rounded-2xl bg-slate-950 border border-slate-800 overflow-hidden select-none flex flex-col ${className}`}
+      className={`relative w-full h-[520px] rounded-2xl bg-slate-950 border border-slate-800 overflow-hidden select-none flex flex-col shadow-2xl ${className}`}
     >
-      {/* Viewport Canvas Container */}
+      {/* Canvas Viewport Container */}
       <div
         ref={containerRef}
         className="w-full h-full cursor-grab active:cursor-grabbing flex-1"
@@ -162,21 +171,17 @@ export const WorldMapViewport: React.FC<WorldMapViewportProps> = ({ className = 
         onWheel={handleWheel}
       />
 
-      {/* Top Header Overlay */}
-      <div className="absolute top-3 left-3 flex items-center gap-2 pointer-events-none">
-        <div className="px-3 py-1.5 rounded-lg bg-slate-900/90 border border-slate-700/80 backdrop-blur-md flex items-center gap-2 shadow-lg">
-          <Compass className="w-4 h-4 text-indigo-400" />
-          <span className="text-xs font-bold text-slate-100">World View (WebGL Renderer)</span>
-          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-800/80">
-            PixiJS 8.x
-          </span>
-        </div>
-      </div>
-
-      {/* Floating Camera Controls Toolbar */}
-      <div className="absolute top-3 right-3 flex items-center gap-1.5 p-1 bg-slate-900/90 border border-slate-800 rounded-xl backdrop-blur-md shadow-xl">
+      {/* Floating Camera & Seed Control Overlay */}
+      <div className="absolute top-4 right-4 flex items-center gap-2 p-1.5 bg-slate-900/90 border border-slate-800 rounded-xl backdrop-blur-md shadow-xl">
         <button
-          id="btn-zoom-in"
+          onClick={() => setSeed((s) => s + 1)}
+          title="Nový Procedurální Seed"
+          className="p-2 rounded-lg hover:bg-slate-800 text-emerald-400 hover:text-emerald-300 transition-colors"
+        >
+          <RefreshCw className="w-4 h-4" />
+        </button>
+        <div className="w-px h-4 bg-slate-800 mx-0.5" />
+        <button
           onClick={handleZoomIn}
           title="Přiblížit (Zoom In)"
           className="p-2 rounded-lg hover:bg-slate-800 text-slate-300 hover:text-white transition-colors"
@@ -184,7 +189,6 @@ export const WorldMapViewport: React.FC<WorldMapViewportProps> = ({ className = 
           <ZoomIn className="w-4 h-4" />
         </button>
         <button
-          id="btn-zoom-out"
           onClick={handleZoomOut}
           title="Oddálit (Zoom Out)"
           className="p-2 rounded-lg hover:bg-slate-800 text-slate-300 hover:text-white transition-colors"
@@ -193,7 +197,6 @@ export const WorldMapViewport: React.FC<WorldMapViewportProps> = ({ className = 
         </button>
         <div className="w-px h-4 bg-slate-800 mx-0.5" />
         <button
-          id="btn-camera-reset"
           onClick={handleResetCamera}
           title="Resetovat Kameru na střed (0, 0)"
           className="p-2 rounded-lg hover:bg-slate-800 text-slate-300 hover:text-white transition-colors"
@@ -202,9 +205,9 @@ export const WorldMapViewport: React.FC<WorldMapViewportProps> = ({ className = 
         </button>
       </div>
 
-      {/* Bottom Telemetry HUD */}
-      <div className="absolute bottom-3 left-3 right-3 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900/90 border border-slate-800/90 backdrop-blur-md text-[11px] font-mono text-slate-300 shadow-md">
+      {/* Floating Telemetry Overlay */}
+      <div className="absolute bottom-4 left-4 right-4 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900/90 border border-slate-800/90 backdrop-blur-md text-xs font-mono text-slate-300 shadow-xl">
           <Move className="w-3.5 h-3.5 text-slate-400" />
           <span>Camera:</span>
           <span className="text-indigo-300 font-semibold">X: {cameraStats.x}</span>
@@ -212,11 +215,14 @@ export const WorldMapViewport: React.FC<WorldMapViewportProps> = ({ className = 
           <span className="text-slate-600">|</span>
           <span>Zoom:</span>
           <span className="text-emerald-400 font-semibold">{cameraStats.zoom}x</span>
+          <span className="text-slate-600">|</span>
+          <span>Seed:</span>
+          <span className="text-amber-400 font-semibold">{seed}</span>
         </div>
 
         {cursorWorldPos && (
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900/90 border border-slate-800/90 backdrop-blur-md text-[11px] font-mono text-slate-300 shadow-md">
-            <span className="text-slate-400">Cursor World:</span>
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900/90 border border-slate-800/90 backdrop-blur-md text-xs font-mono text-slate-300 shadow-xl">
+            <span className="text-slate-400">World:</span>
             <span className="text-amber-300 font-semibold">X: {cursorWorldPos.x}</span>
             <span className="text-amber-300 font-semibold">Y: {cursorWorldPos.y}</span>
           </div>
