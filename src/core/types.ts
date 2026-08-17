@@ -10,6 +10,14 @@ export interface WorldIdentity {
   readonly createdAt: number;
 }
 
+export type WorldStatus = 'active' | 'paused';
+
+export interface WorldState {
+  status: WorldStatus;
+  currentTick: number;
+  simulationTime: SimulationTime;
+}
+
 export type SimulationStatus = 'stopped' | 'running' | 'paused';
 export type SimulationMode = 'manual' | 'automatic';
 
@@ -46,7 +54,7 @@ export interface ISimulationConfig {
   mode?: SimulationMode;
 }
 
-export interface IWorldState {
+export interface IWorldSummary {
   id: WorldId;
   name: string;
   createdTick: number;
@@ -70,7 +78,7 @@ export interface ISimulationSnapshot {
   readonly currentTick: number;
   readonly simulationTime: Readonly<SimulationTime>;
   readonly activeModules: ReadonlyArray<IModuleSnapshot>;
-  readonly world: Readonly<IWorldState>;
+  readonly world: Readonly<IWorldSummary>;
   readonly timestampTick: number;
 }
 
@@ -81,7 +89,7 @@ export interface ISimulation {
   readonly mode: SimulationMode;
   readonly currentTick: number;
   readonly simulationTime: Readonly<SimulationTime>;
-  readonly world: IWorldState;
+  readonly world: IWorldSummary;
   getSnapshot(): ISimulationSnapshot;
   start(): Promise<boolean>;
   pause(): boolean;

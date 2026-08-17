@@ -344,9 +344,16 @@ describe('Entity System', () => {
 
 describe('World & WorldIdentity', () => {
   test('creates world with valid immutable identity', () => {
-    const world = createWorld('world_prime', 'Terra Nova', 'The primary cradle of civilization', 0, {
-      tier: 'L7_WORLD',
-    });
+    const world = createWorld(
+      'world_prime',
+      'Terra Nova',
+      'The primary cradle of civilization',
+      0,
+      undefined,
+      {
+        tier: 'L7_WORLD',
+      }
+    );
 
     assert.strictEqual(world.id, 'world_prime');
     assert.strictEqual(world.name, 'Terra Nova');
@@ -375,4 +382,60 @@ describe('World & WorldIdentity', () => {
     assert.strictEqual(customWorld.description, 'Ancient realm');
     assert.strictEqual(customWorld.createdAt, 100);
   });
+
+  test('initializes default world state correctly (active, tick 0, time)', () => {
+    const world = createWorld('world_1', 'Gaia');
+    assert.strictEqual(world.status, 'active');
+    assert.strictEqual(world.currentTick, 0);
+    assert.deepStrictEqual(world.simulationTime, {
+      tick: 0,
+      seconds: 0,
+      minutes: 0,
+      hours: 0,
+      days: 0,
+      months: 0,
+      years: 0,
+    });
+    assert.strictEqual(world.state.status, 'active');
+  });
+
+  test('updates world status safely and rejects invalid status values', () => {
+    const world = createWorld('world_1', 'Gaia');
+    assert.strictEqual(world.status, 'active');
+
+    world.setStatus('paused');
+    assert.strictEqual(world.status, 'paused');
+    assert.strictEqual(world.state.status, 'paused');
+
+    world.setStatus('active');
+    assert.strictEqual(world.status, 'active');
+
+    assert.throws(() => {
+      // @ts-expect-error test invalid status value
+      world.setStatus('invalid_status');
+    }, /Invalid world status/);
+  });
+
+  test('updates tick counter and simulationTime correctly', () => {
+    const world = createWorld('world_1', 'Gaia');
+
+    const newTime = {
+      tick: 42,
+      seconds: 30,
+      minutes: 15,
+      hours: 8,
+      days: 5,
+      months: 2,
+      years: 1,
+    };
+
+    world.updateTick(42, newTime);
+    assert.strictEqual(world.currentTick, 42);
+    assert.deepStrictEqual(world.simulationTime, newTime);
+
+    assert.throws(() => {
+      world.updateTick(-1, newTime);
+    }, /Tick cannot be negative/);
+  });
 });
+

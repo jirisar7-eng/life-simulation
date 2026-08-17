@@ -3,7 +3,7 @@ import {
   ISimulationConfig,
   ISimulationSnapshot,
   ISimulationTick,
-  IWorldState,
+  IWorldSummary,
   SimulationMode,
   SimulationStatus,
   SimulationTime,
@@ -25,7 +25,7 @@ export class SimulationEngine implements ISimulation {
   private _eventBus: IEventBus;
   private _moduleRegistry: ModuleRegistry;
   private _entityManager: IEntityManager;
-  private _world: IWorldState;
+  private _world: IWorldSummary;
   private _context: IEngineContext;
 
   constructor(config: ISimulationConfig = {}) {
@@ -88,7 +88,7 @@ export class SimulationEngine implements ISimulation {
     return this._clock.getTime();
   }
 
-  public get world(): IWorldState {
+  public get world(): IWorldSummary {
     return {
       ...this._world,
       entitiesCount: this._entityManager.count(),
@@ -272,7 +272,7 @@ export class SimulationEngine implements ISimulation {
       })
     );
 
-    const worldSnapshot: IWorldState = {
+    const worldSnapshot: IWorldSummary = {
       id: this._world.id,
       name: this._world.name,
       createdTick: this._world.createdTick,
