@@ -8,3 +8,4 @@ export * from './SimulationEngine';
 export * from '../models/entity';
 export * from '../models/hierarchy';
 export * from '../models/world';
+export * from '../models/worldContainer';

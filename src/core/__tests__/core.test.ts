@@ -31,6 +31,7 @@ import {
   traverseTopDown,
   traverseBottomUp,
   IHierarchyNode,
+  WorldContainer,
 } from '../index';
 
 describe('Simulation Clock & Determinism', () => {
@@ -592,6 +593,130 @@ describe('World Hierarchy (L1–L7 Skeleton)', () => {
     );
 
     assert.strictEqual(totalPopulation, 2);
+  });
+});
+
+describe('WorldContainer (Domain Hierarchy Service)', () => {
+  test('adds and retrieves entities across hierarchy levels with automatic parent-child linking', () => {
+    const container = new WorldContainer();
+
+    const world = createWorldNode('world_main', 'Aethelgard');
+    const region = createRegionNode('reg_north', 'Frostpeaks', world.id);
+    const settlement = createSettlementNode('set_valen', 'Valen City', region.id);
+    const community = createCommunityNode('com_market', 'Market Ward', settlement.id);
+    const group = createGroupNode('grp_traders', 'Merchants Guild', community.id);
+    const household = createHouseholdNode('house_1', 'Stone Manor', group.id);
+    const individual = createIndividualNode('ind_1', 'Gareth Stone', household.id);
+
+    container.addEntity(world);
+    assert.strictEqual(container.root?.id, 'world_main');
+    assert.strictEqual(container.getRoot()?.id, 'world_main');
+
+    container.addEntity(region);
+    container.addEntity(settlement);
+    container.addEntity(community);
+    container.addEntity(group);
+    container.addEntity(household);
+    container.addEntity(individual);
+
+    assert.strictEqual(container.count(), 7);
+    assert.strictEqual(container.hasEntity('ind_1'), true);
+    assert.strictEqual(container.hasEntity('non_existent'), false);
+
+    // Get entity
+    const retrievedInd = container.getEntity('ind_1');
+    assert.strictEqual(retrievedInd?.id, 'ind_1');
+    assert.strictEqual(retrievedInd?.tier, 'L1_INDIVIDUAL');
+
+    // Parent / child relationships
+    const parentOfInd = container.getParent('ind_1');
+    assert.strictEqual(parentOfInd?.id, 'house_1');
+
+    const childrenOfHouse = container.getChildren('house_1');
+    assert.strictEqual(childrenOfHouse.length, 1);
+    assert.strictEqual(childrenOfHouse[0].id, 'ind_1');
+
+    const childrenOfWorld = container.getChildren('world_main');
+    assert.strictEqual(childrenOfWorld.length, 1);
+    assert.strictEqual(childrenOfWorld[0].id, 'reg_north');
+  });
+
+  test('removes entities cleanly with cascade and updates parent child lists', () => {
+    const container = new WorldContainer();
+    const world = createWorldNode('w', 'World');
+    const region = createRegionNode('r', 'Region', 'w');
+    const s1 = createSettlementNode('s1', 'Settlement 1', 'r');
+    const s2 = createSettlementNode('s2', 'Settlement 2', 'r');
+
+    container.addEntity(world);
+    container.addEntity(region);
+    container.addEntity(s1);
+    container.addEntity(s2);
+
+    assert.strictEqual(container.count(), 4);
+    assert.strictEqual(container.getChildren('r').length, 2);
+
+    // Remove single settlement s1
+    const removedS1 = container.removeEntity('s1');
+    assert.strictEqual(removedS1, true);
+    assert.strictEqual(container.hasEntity('s1'), false);
+    assert.strictEqual(container.getChildren('r').length, 1);
+    assert.strictEqual(container.getChildren('r')[0].id, 's2');
+    assert.strictEqual(container.count(), 3);
+
+    // Cascade removal of region 'r' removes 's2' as well
+    const removedRegion = container.removeEntity('r', true);
+    assert.strictEqual(removedRegion, true);
+    assert.strictEqual(container.hasEntity('r'), false);
+    assert.strictEqual(container.hasEntity('s2'), false);
+    assert.strictEqual(container.count(), 1);
+    assert.strictEqual(container.getChildren('w').length, 0);
+
+    // Removing non-existent entity returns false
+    assert.strictEqual(container.removeEntity('non_existent'), false);
+  });
+
+  test('rejects duplicate entity ID', () => {
+    const container = new WorldContainer();
+    const world = createWorldNode('w_unique', 'World 1');
+    container.addEntity(world);
+
+    const duplicateWorld = createWorldNode('w_unique', 'World Duplicate');
+    assert.throws(() => {
+      container.addEntity(duplicateWorld);
+    }, /Duplicate EntityId/);
+  });
+
+  test('rejects adding non-root entity with non-existent parent', () => {
+    const container = new WorldContainer();
+    const region = createRegionNode('r_orphan', 'Orphan Region', 'missing_world');
+
+    assert.throws(() => {
+      container.addEntity(region);
+    }, /Parent entity with id 'missing_world' does not exist/);
+  });
+
+  test('rejects cycles and invalid hierarchy relationships', () => {
+    const container = new WorldContainer();
+    const world = createWorldNode('w', 'World');
+    const region = createRegionNode('r', 'Region', 'w');
+    container.addEntity(world);
+    container.addEntity(region);
+
+    // Attempt to add node with parentId pointing to itself
+    const selfParent = createSettlementNode('s_self', 'Self Parent', 's_self');
+    assert.throws(() => {
+      container.addEntity(selfParent);
+    }, /Parent entity with id 's_self' does not exist/);
+
+    // Attempt to add a child with wrong tier level (e.g. region under settlement)
+    const settlement = createSettlementNode('s', 'Settlement', 'r');
+    container.addEntity(settlement);
+
+    const invalidRegion = createRegionNode('r_invalid', 'Invalid Region Under Settlement', 's');
+    assert.throws(() => {
+      container.addEntity(invalidRegion);
+    }, /Invalid hierarchy tier relation/);
   });
 });
 

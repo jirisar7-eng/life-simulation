@@ -106,3 +106,15 @@ V `/src/models/hierarchy.ts` jsou připravena typová rozhraní:
 - `L3_GROUP`: Cech / frakce / hlídka.
 - `L2_HOUSEHOLD`: Domácnost / rodinná buňka.
 - `L1_INDIVIDUAL`: Jednotlivý agent (NPC).
+
+---
+
+## 10. World Container (`WorldContainer`)
+Doménová služba pro bezpečnou správu hierarchického stromu entit (`src/models/worldContainer.ts`):
+- **Správa stromu**: `addEntity()`, `removeEntity()`, `getEntity()`, `getChildren()`, `getParent()`, `getRoot()`.
+- **Validace integrity**:
+  - Garance unikátního `EntityId`.
+  - Ověření existence nadřazené entity (`parentId`).
+  - Kontrola hierarchické nadřazenosti tierů (`L7_WORLD` -> `L6_REGION` -> `L5_SETTLEMENT` -> `L4_COMMUNITY` -> `L3_GROUP` -> `L2_HOUSEHOLD` -> `L1_INDIVIDUAL`).
+  - Striktní detekce a zamezení cyklů ve stromu.
+- **Čisté oddělení**: Neobsahuje žádnou simulační, tickovací, AI ani UI logiku.
