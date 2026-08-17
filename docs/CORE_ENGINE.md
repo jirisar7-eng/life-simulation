@@ -129,3 +129,13 @@ Read-only API vrstva pro bezpečné dotazování a inspekci hierarchie světa (`
 - `getParent(id)`: Vrátí přímého rodiče dané entity.
 - `getDescendants(id)`: Rekurzivně vyhledá a vrátí všechny potomky pod danou entitou.
 - **Striktní Read-Only**: Neprovádí žádné mutace, nezasahuje do simulačního cyklu ani UI.
+
+---
+
+## 12. Entity Repository Foundation (`IEntityRepository`)
+Abstraktní persistence rozhraní pro ukládání a načítání entit (`src/repositories/entityRepository.ts`):
+- **Rozhraní**: `getById(id)`, `getAll()`, `save(entity)`, `delete(id)`, `exists(id)`.
+- **Implementace**:
+  - `InMemoryEntityRepository`: Plně funkční in-memory adaptér pro runtime a testy bez externích závislostí.
+  - Plánováno: budoucí `PrismaEntityRepository` / SQL adaptér.
+- **Oddělení vrstev**: Core Engine neobsahuje žádné přímé vazby na konkrétní databázový ORM ani persistence technologii.

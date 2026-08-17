@@ -10,3 +10,4 @@ export * from '../models/hierarchy';
 export * from '../models/world';
 export * from '../models/worldContainer';
 export * from '../models/worldQuery';
+export * from '../repositories/entityRepository';

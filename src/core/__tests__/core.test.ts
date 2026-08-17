@@ -33,6 +33,8 @@ import {
   IHierarchyNode,
   WorldContainer,
   WorldQueryService,
+  InMemoryEntityRepository,
+  IEntity,
 } from '../index';
 
 describe('Simulation Clock & Determinism', () => {
@@ -804,6 +806,76 @@ describe('WorldQueryService (Read-Only Hierarchy API)', () => {
     assert.deepStrictEqual(query.getChildren('does_not_exist'), []);
     assert.strictEqual(query.getParent('does_not_exist'), undefined);
     assert.deepStrictEqual(query.getDescendants('does_not_exist'), []);
+  });
+});
+
+describe('EntityRepository (Persistence Foundation)', () => {
+  test('saves and retrieves entities by ID', async () => {
+    const repo = new InMemoryEntityRepository();
+    const entity: IEntity = {
+      id: 'entity_1',
+      type: 'individual',
+      createdAtTick: 10,
+      tags: ['hero', 'warrior'],
+      metadata: { level: 5 },
+    };
+
+    const saved = await repo.save(entity);
+    assert.strictEqual(saved.id, 'entity_1');
+    assert.strictEqual(saved.type, 'individual');
+
+    const retrieved = await repo.getById('entity_1');
+    assert.deepStrictEqual(retrieved, entity);
+  });
+
+  test('retrieves all saved entities via getAll()', async () => {
+    const repo = new InMemoryEntityRepository();
+    const e1: IEntity = { id: 'e1', type: 'region', createdAtTick: 0, tags: [], metadata: {} };
+    const e2: IEntity = { id: 'e2', type: 'settlement', createdAtTick: 5, tags: [], metadata: {} };
+
+    await repo.save(e1);
+    await repo.save(e2);
+
+    const all = await repo.getAll();
+    assert.strictEqual(all.length, 2);
+    assert.deepStrictEqual(
+      all.map((e) => e.id).sort(),
+      ['e1', 'e2']
+    );
+  });
+
+  test('checks existence with exists()', async () => {
+    const repo = new InMemoryEntityRepository();
+    const e: IEntity = { id: 'exists_test', type: 'group', createdAtTick: 0, tags: [], metadata: {} };
+
+    assert.strictEqual(await repo.exists('exists_test'), false);
+    await repo.save(e);
+    assert.strictEqual(await repo.exists('exists_test'), true);
+  });
+
+  test('deletes entities and updates existence status', async () => {
+    const repo = new InMemoryEntityRepository();
+    const e: IEntity = { id: 'del_me', type: 'item', createdAtTick: 1, tags: [], metadata: {} };
+
+    await repo.save(e);
+    assert.strictEqual(await repo.exists('del_me'), true);
+
+    const deleted = await repo.delete('del_me');
+    assert.strictEqual(deleted, true);
+    assert.strictEqual(await repo.exists('del_me'), false);
+    assert.strictEqual(await repo.getById('del_me'), undefined);
+
+    // Deleting non-existent returns false
+    assert.strictEqual(await repo.delete('non_existent'), false);
+  });
+
+  test('returns undefined for non-existent entities and empty array when repository is empty', async () => {
+    const repo = new InMemoryEntityRepository();
+
+    assert.strictEqual(await repo.getById('missing_id'), undefined);
+    assert.strictEqual(await repo.exists('missing_id'), false);
+    assert.deepStrictEqual(await repo.getAll(), []);
+    assert.strictEqual(await repo.count(), 0);
   });
 });
 
